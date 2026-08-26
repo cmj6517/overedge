@@ -46,6 +46,21 @@ header .stats{margin-top:14px; font-size:0.82em; color:#d8c3ad;}
 }
 .tab.active{background:var(--ink); color:#fff; border-color:var(--ink);}
 
+.search-wrap{
+  max-width:640px; margin:16px auto 0; padding:0 16px; display:flex; gap:8px;
+}
+.search-input{
+  flex:1; padding:11px 16px; border:1.5px solid var(--line); border-radius:24px; font-size:0.92em;
+  font-family:inherit; outline:none; color:var(--ink); background:#fff;
+}
+.search-input:focus{border-color:var(--accent2);}
+.search-wrap .btn{border-radius:20px;}
+.search-status{
+  text-align:center; font-size:0.82em; color:var(--sub); padding:8px 16px 0; min-height:1.2em;
+}
+.search-status.no-result{color:var(--accent);}
+mark.hl{background:#ffe8a3; color:inherit; border-radius:2px; padding:0 1px;}
+
 main{max-width:880px; margin:0 auto; padding:18px 16px 40px;}
 
 .part-divider{
@@ -150,6 +165,12 @@ footer{text-align:center; color:var(--sub); font-size:0.8em; padding:30px 16px 1
   <button class="tab" data-cat="벤처테마개발론">벤처테마개발론</button>
 </div>
 
+<div class="search-wrap">
+  <input type="text" id="searchInput" class="search-input" placeholder="검색어를 입력하세요 (문제, 키워드, 문장 일부 등)">
+  <button class="btn" id="searchClear">지우기</button>
+</div>
+<div class="search-status" id="searchStatus"></div>
+
 <main id="main"></main>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -178,14 +199,14 @@ function renderCard(item){
   const cls = CAT_CLASS[item.category] || 'cat-1';
   const stars = item.stars ? `<span class="stars">${item.stars}</span>` : '';
   return `
-  <div class="card" data-cat="${escapeHtml(item.category)}" id="card-${item.id}">
+  <div class="card" data-id="${item.id}" data-cat="${escapeHtml(item.category)}" id="card-${item.id}">
     <div class="card-head">
       <span class="badge ${cls}">${escapeHtml(item.category)}</span>
       <span class="badge part">${PART_LABEL[item.part]}</span>
       ${stars}
       <span class="qnum">#${item.id} (${PART_LABEL[item.part]} Q${item.num})</span>
     </div>
-    <div class="question">Q. ${escapeHtml(item.question)}</div>
+    <div class="question" id="question-${item.id}">Q. ${escapeHtml(item.question)}</div>
     <div class="answer-label">모범답안 <span class="len">(${item.answer_len}자 · 박사과정 서술)</span></div>
     <div class="answer-hidden-msg" id="hiddenmsg-${item.id}">모범답안이 숨겨져 있습니다. 상단의 "모범답안 보기" 버튼을 눌러 확인하세요.</div>
     <div class="answer-block" id="answer-${item.id}">${escapeHtml(item.phd_answer)}</div>
@@ -211,6 +232,74 @@ function renderAll(){
 }
 renderAll();
 
+// ---------- 검색 인덱스 구축 ----------
+const SEARCH_INDEX = {};
+DATA.forEach(item=>{
+  const raw = [item.question, item.phd_answer, item.category, item.mnemonic_raw||''].join(' ');
+  SEARCH_INDEX[item.id] = raw.toLowerCase();
+});
+
+function highlightText(text, query){
+  const esc = escapeHtml(text);
+  if(!query) return esc;
+  const lowerEsc = esc.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  let result = '';
+  let i = 0;
+  while(i < esc.length){
+    const idx = lowerEsc.indexOf(lowerQuery, i);
+    if(idx === -1){ result += esc.slice(i); break; }
+    result += esc.slice(i, idx) + '<mark class="hl">' + esc.slice(idx, idx + query.length) + '</mark>';
+    i = idx + query.length;
+  }
+  return result;
+}
+
+let currentCategory = 'all';
+
+function applyFilters(){
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+  let visibleCount = 0;
+  const dividerHasVisible = {};
+
+  DATA.forEach(item=>{
+    const card = document.getElementById('card-' + item.id);
+    if(!card) return;
+    const catMatch = (currentCategory === 'all' || item.category === currentCategory);
+    const searchMatch = !query || SEARCH_INDEX[item.id].includes(query);
+    const visible = catMatch && searchMatch;
+    card.style.display = visible ? '' : 'none';
+
+    const qEl = document.getElementById('question-' + item.id);
+    if(qEl) qEl.innerHTML = 'Q. ' + highlightText(item.question, visible ? query : '');
+
+    if(visible){
+      visibleCount++;
+      dividerHasVisible[item.part] = true;
+    }
+  });
+
+  document.querySelectorAll('[data-partdivider]').forEach(d=>{
+    const part = d.dataset.partdivider;
+    d.style.display = dividerHasVisible[part] ? '' : 'none';
+  });
+
+  const status = document.getElementById('searchStatus');
+  if(query){
+    status.textContent = visibleCount + '개 문항이 검색되었습니다.';
+    status.classList.toggle('no-result', visibleCount === 0);
+  } else {
+    status.textContent = '';
+    status.classList.remove('no-result');
+  }
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('searchClear').addEventListener('click', ()=>{
+  document.getElementById('searchInput').value = '';
+  applyFilters();
+});
+
 // 전체 숨기기/보기
 document.getElementById('toggleAllBtn').addEventListener('click', function(){
   answersVisible = !answersVisible;
@@ -228,14 +317,8 @@ document.getElementById('tabBar').addEventListener('click', (e)=>{
   if(!btn) return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  const cat = btn.dataset.cat;
-  document.querySelectorAll('.card').forEach(card=>{
-    card.style.display = (cat==='all' || card.dataset.cat===cat) ? '' : 'none';
-  });
-  document.querySelectorAll('[data-partdivider]').forEach(d=>{
-    // hide divider if no visible card follows immediately in that group (simplified: always show when 'all')
-    d.style.display = (cat==='all') ? '' : 'none';
-  });
+  currentCategory = btn.dataset.cat;
+  applyFilters();
 });
 
 // ---------- 근거 시각화 ----------
