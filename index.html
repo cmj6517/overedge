@@ -199,11 +199,70 @@
     border-top: 1px solid #eee;
     padding-top: 16px;
   }
+
+  .search-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #ffffff;
+    border: 1px solid #d7dee6;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 26px;
+    display: flex;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .search-bar input {
+    flex: 1;
+    border: 1px solid #cfd9e3;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+  }
+  .search-bar input:focus {
+    border-color: #16324a;
+  }
+  .search-bar button {
+    background: #16324a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .search-bar button:hover {
+    background: #0f2438;
+  }
+  .search-msg {
+    font-size: 12px;
+    color: #b23b3b;
+    margin: -18px 0 20px 2px;
+    min-height: 16px;
+  }
+  .search-highlight {
+    animation: flashHighlight 2s ease;
+  }
+  @keyframes flashHighlight {
+    0%   { background-color: #fff3b0; }
+    100% { background-color: transparent; }
+  }
 </style>
 </head>
 <body>
 
   <h1>2026학년도 2학기 대학원 종합시험 예상문제</h1>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="키워드 또는 장(예: M&amp;A, 포터, 5장, 표본추출) 검색">
+    <button onclick="doSearch()">검색</button>
+  </div>
+  <div class="search-msg" id="searchMsg"></div>
 
   <!-- 1. 벤처테마개발론 -->
   <div class="subject">
@@ -451,6 +510,52 @@
   </div>
 
   <div class="footer-note">2026학년도 2학기 대학원 종합시험 대비 · 예상문제 4과목 (벤처테마개발론 5문항 · 인터넷마케팅전략세미나 1문항 · e-Business전략론 1문항 · 연구방법총론 10문항, 각 답안 1,000~1,200자 작성 권장)</div>
+  <script>
+    function buildSearchIndex() {
+      const items = [];
+      document.querySelectorAll('.subject').forEach(subj => {
+        const tag = subj.querySelector('.subject-tag') ? subj.querySelector('.subject-tag').textContent : '';
+        const h2 = subj.querySelector('h2') ? subj.querySelector('h2').textContent : '';
+        items.push({ text: tag + ' ' + h2, el: subj });
+
+        subj.querySelectorAll('.question-box p').forEach(p => {
+          items.push({ text: h2 + ' ' + p.textContent, el: p.closest('.question-box') });
+        });
+
+        subj.querySelectorAll('.subq-item').forEach(item => {
+          const head = item.querySelector('.subq-head') ? item.querySelector('.subq-head').textContent : '';
+          items.push({ text: h2 + ' ' + head, el: item });
+        });
+      });
+      return items;
+    }
+
+    function doSearch() {
+      const input = document.getElementById('searchInput');
+      const msg = document.getElementById('searchMsg');
+      const q = input.value.trim().toLowerCase();
+      msg.textContent = '';
+      if (!q) return;
+
+      const index = buildSearchIndex();
+      const match = index.find(item => item.text.toLowerCase().includes(q));
+
+      if (match) {
+        match.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        match.el.classList.remove('search-highlight');
+        void match.el.offsetWidth;
+        match.el.classList.add('search-highlight');
+      } else {
+        msg.textContent = '"' + input.value + '"에 해당하는 문항을 찾을 수 없습니다.';
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        doSearch();
+      }
+    });
+  </script>
 
 </body>
 </html>
